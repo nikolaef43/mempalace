@@ -476,9 +476,9 @@ class TestWriteTools:
 
         assert result1["success"] is True
         assert result2["success"] is True
-        assert (
-            result1["drawer_id"] != result2["drawer_id"]
-        ), "Documents with shared header but different content must have distinct drawer IDs"
+        assert result1["drawer_id"] != result2["drawer_id"], (
+            "Documents with shared header but different content must have distinct drawer IDs"
+        )
 
     def test_delete_drawer(self, monkeypatch, config, palace_path, seeded_collection, kg):
         _patch_mcp_server(monkeypatch, config, kg)
@@ -513,6 +513,25 @@ class TestWriteTools:
             threshold=0.99,
         )
         assert result["is_duplicate"] is False
+
+    def test_check_duplicate_short_circuits_when_vector_disabled(self, monkeypatch):
+        from mempalace import mcp_server
+
+        monkeypatch.setattr(
+            mcp_server,
+            "hnsw_capacity_status",
+            lambda *_args, **_kwargs: {"diverged": True, "message": "capacity mismatch"},
+        )
+
+        def fail_get_collection():
+            raise AssertionError("_get_collection must not run when vector search is disabled")
+
+        monkeypatch.setattr(mcp_server, "_get_collection", fail_get_collection)
+        result = mcp_server.tool_check_duplicate("content")
+
+        assert result["is_duplicate"] is False
+        assert result["vector_disabled"] is True
+        assert result["vector_disabled_reason"] == "capacity mismatch"
 
     def test_get_drawer(self, monkeypatch, config, palace_path, seeded_collection, kg):
         _patch_mcp_server(monkeypatch, config, kg)
